@@ -1,0 +1,16 @@
+.DS_Store
+.env
+*.db
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+backend/data/
+frontend/.next/
+frontend/node_modules/
+frontend/next-env.d.ts
+frontend/test-results/
+frontend/tsconfig.tsbuildinfo
+docs/assets/freja-sprint-1-pipeline.png
+*.log
+.coverage
