@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import logging
+from collections import Counter
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -16,6 +17,7 @@ from app.services.asset_service import AssetService
 from app.services.collectors import enabled_collectors
 from app.services.collectors.base import CollectedItem
 from app.services.llm import LLMService
+from app.services.preferences import PreferenceService, topics_for
 from app.services.source_registry import SourceRegistry
 
 logger = logging.getLogger(__name__)
@@ -34,6 +36,7 @@ class BriefService:
         self.snapshots = SourceSnapshotRepository(session)
         self.assets = AssetService(session, settings)
         self.llm = LLMService(settings)
+        self.preferences = PreferenceService(session)
 
     async def generate(self, *, force_refresh: bool = False) -> Asset:
         if _generation_lock.locked():
@@ -97,8 +100,8 @@ class BriefService:
             snapshot_usage[collector.name] = "collected"
 
         self.assets.index_many(new_assets)
-        ranked = sorted(candidates, key=self._importance, reverse=True)
-        selected = ranked[:30]
+        preference_profile = self.preferences.build_profile()
+        selected, recency_stats = self._select_recent_candidates(candidates)
         brief_markdown = self.llm.create_chinese_brief(
             [
                 {
@@ -108,9 +111,11 @@ class BriefService:
                     "url": asset.url,
                     "occurred_at": asset.occurred_at.isoformat() if asset.occurred_at else None,
                     "metadata": asset.asset_metadata,
+                    "topics": topics_for(asset),
                 }
                 for asset in selected
-            ]
+            ],
+            preferences=preference_profile.summary(),
         )
         now = datetime.now(timezone.utc)
         return self.assets.create(
@@ -123,12 +128,73 @@ class BriefService:
                 metadata={
                     "item_ids": [asset.id for asset in selected],
                     "candidate_count": len(candidates),
+                    "eligible_candidate_count": recency_stats["eligible"],
+                    "fresh_candidate_count": recency_stats["fresh"],
+                    "fallback_candidate_count": recency_stats["fallback"],
+                    "fallback_selected_count": recency_stats["fallback_selected"],
+                    "recency_policy": {
+                        "fresh_hours": self.settings.brief_fresh_hours,
+                        "max_age_days": self.settings.brief_max_age_days,
+                    },
                     "source_snapshots": snapshot_usage,
                     "local_date": local_date.isoformat(),
+                    "preference_profile": preference_profile.summary(),
                 },
                 occurred_at=now,
             )
         )
+
+    def _select_recent_candidates(
+        self, candidates: list[Asset], *, now: datetime | None = None
+    ) -> tuple[list[Asset], dict[str, int]]:
+        fresh, fallback = self._candidate_recency_tiers(candidates, now=now)
+        limit = self.settings.brief_max_items
+        selected = self.preferences.rank(fresh, limit=limit)
+        fallback_selected = 0
+
+        if len(selected) < limit:
+            source_counts = Counter(asset.source or "unknown" for asset in selected)
+            fallback_ranked = self.preferences.rank(fallback, limit=limit)
+            for asset in fallback_ranked:
+                source = asset.source or "unknown"
+                if source_counts[source] >= 3:
+                    continue
+                selected.append(asset)
+                source_counts[source] += 1
+                fallback_selected += 1
+                if len(selected) >= limit:
+                    break
+
+        return selected, {
+            "fresh": len(fresh),
+            "fallback": len(fallback),
+            "eligible": len(fresh) + len(fallback),
+            "fallback_selected": fallback_selected,
+        }
+
+    def _candidate_recency_tiers(
+        self, candidates: list[Asset], *, now: datetime | None = None
+    ) -> tuple[list[Asset], list[Asset]]:
+        reference = now or datetime.now(timezone.utc)
+        fresh: list[Asset] = []
+        fallback: list[Asset] = []
+        fresh_seconds = self.settings.brief_fresh_hours * 3_600
+        max_seconds = self.settings.brief_max_age_days * 86_400
+
+        for asset in candidates:
+            occurred_at = asset.occurred_at
+            if occurred_at is None and asset.source == "github_trending":
+                occurred_at = asset.created_at
+            if occurred_at is None:
+                continue
+            if occurred_at.tzinfo is None:
+                occurred_at = occurred_at.replace(tzinfo=timezone.utc)
+            age_seconds = max(0.0, (reference - occurred_at).total_seconds())
+            if age_seconds <= fresh_seconds:
+                fresh.append(asset)
+            elif age_seconds <= max_seconds:
+                fallback.append(asset)
+        return fresh, fallback
 
     def _persist_items(self, items: list[CollectedItem]) -> tuple[list[Asset], list[Asset]]:
         source_assets: list[Asset] = []
@@ -170,11 +236,6 @@ class BriefService:
             source_config.update(
                 subreddits=self.settings.reddit_subreddits,
                 max_age_hours=self.settings.reddit_max_age_hours,
-            )
-        elif source_id == "xiaohongshu":
-            source_config.update(
-                queries=self.settings.xiaohongshu_queries,
-                site=self.settings.xiaohongshu_opencli_site,
             )
         serialized = json.dumps(source_config, ensure_ascii=True, sort_keys=True)
         return hashlib.sha256(serialized.encode()).hexdigest()

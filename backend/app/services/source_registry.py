@@ -22,7 +22,6 @@ class SourceDefinition:
 
 SOURCE_DEFINITIONS = [
     SourceDefinition("reddit", "Reddit", "AI community posts and discussions", "community", "OpenCLI · Chrome session", "browser_session", "needs_auth"),
-    SourceDefinition("xiaohongshu", "小红书 / Rednote", "AI discussions and creator notes", "community", "OpenCLI · official international site", "browser_session", "needs_auth"),
     SourceDefinition("x", "Twitter / X", "Accounts, lists, and AI conversations", "community", "OpenCLI · Chrome session", "browser_session", "planned"),
     SourceDefinition("linkedin", "LinkedIn", "Professional posts and company updates", "community", "OpenCLI · Chrome session", "browser_session", "planned"),
     SourceDefinition("openai_blog", "OpenAI Blog", "Official OpenAI product and research updates", "official", "RSS", "none", "available"),
@@ -66,11 +65,13 @@ class SourceRegistry:
             if subscription and not opencli_ready:
                 subscription.enabled = False
                 subscription.health = "needs_auth"
+            elif subscription and subscription.health == "needs_auth":
+                subscription.health = "unknown"
         self.session.commit()
 
     @property
     def opencli_sources(self) -> set[str]:
-        return {"reddit", "xiaohongshu"}
+        return {"reddit"}
 
     @property
     def opencli_ready(self) -> bool:
@@ -124,6 +125,8 @@ class SourceRegistry:
             raise ValueError("OpenCLI requires its Chrome extension and a signed-in browser session")
         subscription = self.session.get(SourceSubscription, source_id)
         subscription.enabled = enabled
+        if enabled and subscription.health == "needs_auth":
+            subscription.health = "unknown"
         subscription.updated_at = datetime.now(timezone.utc)
         self.session.commit()
 

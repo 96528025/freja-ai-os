@@ -5,8 +5,7 @@ def test_sources_are_independently_configurable(client):
     assert sources["openai_blog"]["acquisition"] == "RSS"
     assert "hacker_news" not in sources
     assert sources["reddit"]["availability"] == "needs_auth"
-    assert sources["xiaohongshu"]["availability"] == "needs_auth"
-    assert sources["xiaohongshu"]["name"] == "小红书 / Rednote"
+    assert "xiaohongshu" not in sources
     assert sources["linkedin"]["availability"] == "planned"
 
     updated = client.patch("/api/v1/sources/github_trending", json={"enabled": False})

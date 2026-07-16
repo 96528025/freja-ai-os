@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import create_engine, select
@@ -33,6 +33,69 @@ def test_only_requested_collectors_are_created():
 
 def test_brief_markdown_fence_is_removed():
     assert LLMService.strip_markdown_fence("```markdown\n# Brief\n\nBody\n```") == "# Brief\n\nBody"
+
+
+def test_brief_prefers_72_hours_then_falls_back_only_within_7_days():
+    now = datetime(2026, 7, 16, 20, 0, tzinfo=timezone.utc)
+
+    def candidate(name: str, age: timedelta, source: str | None = None):
+        return type(
+            "AssetLike",
+            (),
+            {
+                "id": name,
+                "source": source or name,
+                "occurred_at": now - age,
+                "created_at": now,
+            },
+        )()
+
+    service = object.__new__(BriefService)
+    service.settings = Settings(
+        openai_api_key=None,
+        scheduler_enabled=False,
+        brief_fresh_hours=72,
+        brief_max_age_days=7,
+        brief_max_items=5,
+    )
+    service.preferences = type(
+        "Ranker", (), {"rank": lambda self, items, limit: list(items)[:limit]}
+    )()
+    fresh = [candidate(f"fresh-{index}", timedelta(hours=24 + index)) for index in range(4)]
+    fallback = [candidate(f"fallback-{index}", timedelta(days=4 + index)) for index in range(3)]
+    expired = candidate("expired", timedelta(days=8))
+
+    selected, stats = service._select_recent_candidates(
+        [*fallback, expired, *fresh], now=now
+    )
+
+    assert [asset.id for asset in selected[:4]] == [asset.id for asset in fresh]
+    assert expired not in selected
+    assert len(selected) == 5
+    assert stats == {"fresh": 4, "fallback": 3, "eligible": 7, "fallback_selected": 1}
+
+
+def test_undated_daily_github_trending_is_allowed_but_undated_news_is_not():
+    now = datetime(2026, 7, 16, 20, 0, tzinfo=timezone.utc)
+    service = object.__new__(BriefService)
+    service.settings = Settings(openai_api_key=None, scheduler_enabled=False)
+    github = type(
+        "AssetLike",
+        (),
+        {"source": "github_trending", "occurred_at": None, "created_at": now},
+    )()
+    undated_news = type(
+        "AssetLike",
+        (),
+        {"source": "openai_blog", "occurred_at": None, "created_at": now},
+    )()
+
+    fresh, fallback = service._candidate_recency_tiers(
+        [github, undated_news], now=now
+    )
+
+    assert fresh == [github]
+    assert fallback == []
 
 
 @pytest.mark.asyncio

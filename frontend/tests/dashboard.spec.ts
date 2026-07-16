@@ -37,7 +37,7 @@ test("source selection shows only current product sources", async ({ page }, tes
   await page.goto("/");
 
   await expect(page.getByLabel("Include Reddit")).toBeVisible();
-  await expect(page.getByLabel("Include 小红书 / Rednote")).toBeVisible();
+  await expect(page.getByText("小红书 / Rednote", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Include OpenAI Blog")).toBeVisible();
   await expect(page.getByLabel("Include GitHub Trending")).toBeVisible();
   await expect(page.getByText("Twitter / X", { exact: true })).toHaveCount(0);

@@ -31,4 +31,4 @@ launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.freja.personal-ai-os.p
 rm ~/Library/LaunchAgents/com.freja.personal-ai-os.plist
 ```
 
-The Mac and authenticated Chrome/OpenCLI session must still be available for Reddit and Rednote collection. If the Mac was off, the startup catch-up runs after the next login.
+The Mac and authenticated Chrome/OpenCLI session must still be available for Reddit collection. Official RSS, release feeds, and GitHub Trending do not require that browser session. If the Mac was off, the startup catch-up runs after the next login.

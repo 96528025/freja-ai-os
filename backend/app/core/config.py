@@ -21,13 +21,15 @@ class Settings(BaseSettings):
     )
     brief_hour: int = 7
     brief_minute: int = 0
+    brief_fresh_hours: int = 72
+    brief_max_age_days: int = 7
+    brief_max_items: int = 5
     timezone: str = "America/Los_Angeles"
     scheduler_enabled: bool = True
     collector_limit: int = 12
     news_sources: list[str] = Field(
         default=[
             "reddit",
-            "xiaohongshu",
             "openai_blog",
             "anthropic_blog",
             "google_deepmind_blog",
@@ -43,11 +45,6 @@ class Settings(BaseSettings):
         default=["LocalLLaMA", "MachineLearning", "ChatGPT", "OpenAI", "ClaudeAI"]
     )
     reddit_max_age_hours: int = 72
-    xiaohongshu_queries: list[str] = Field(
-        default=["AI 编程", "Claude Code", "OpenAI"]
-    )
-    xiaohongshu_opencli_site: str = "rednote"
-
     def ensure_data_dirs(self) -> None:
         if self.database_url.startswith("sqlite:///"):
             Path(self.database_url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)

@@ -21,6 +21,33 @@ export interface DashboardData {
   stats: { total_assets: number; ideas: number; news: number; research: number; tasks: number };
 }
 
+export type FeedbackSignal = "interested" | "not_interested";
+export type FeedbackReason = "not_relevant" | "too_basic" | "too_marketing" | "repetitive" | "source_not_useful" | "other";
+
+export interface Feedback {
+  id: string;
+  brief_id: string;
+  asset_id: string | null;
+  signal: FeedbackSignal | null;
+  reason: FeedbackReason | null;
+  satisfaction: number | null;
+  note: string | null;
+}
+
+export interface BriefFeedbackState {
+  satisfaction: Feedback | null;
+  items: Array<{ asset: Asset; feedback: Feedback | null }>;
+}
+
+export interface PreferenceProfile {
+  total_item_feedback: number;
+  interested: number;
+  not_interested: number;
+  average_satisfaction: number | null;
+  preferred_topics: string[];
+  avoided_topics: string[];
+}
+
 export interface SourceDefinition {
   id: string;
   name: string;
@@ -39,7 +66,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1
 
 export async function getDashboard(): Promise<DashboardData> {
   const response = await fetch(`${API_URL}/dashboard`, { cache: "no-store" });
-  if (!response.ok) throw new Error("Could not load Freja");
+  if (!response.ok) throw new Error("Could not load Personal AI");
   return response.json();
 }
 
@@ -56,6 +83,44 @@ export async function captureIdea(content: string): Promise<Asset> {
 export async function generateBrief(): Promise<void> {
   const response = await fetch(`${API_URL}/briefs/generate`, { method: "POST" });
   if (!response.ok) throw new Error("Brief could not be started");
+}
+
+export async function getBriefFeedback(briefId: string): Promise<BriefFeedbackState> {
+  const response = await fetch(`${API_URL}/briefs/${briefId}/feedback`, { cache: "no-store" });
+  if (!response.ok) throw new Error("无法加载简报反馈");
+  return response.json();
+}
+
+export async function rateBrief(briefId: string, satisfaction: number): Promise<Feedback> {
+  const response = await fetch(`${API_URL}/briefs/${briefId}/feedback`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ satisfaction }),
+  });
+  if (!response.ok) throw new Error("无法保存满意度");
+  return response.json();
+}
+
+export async function rateBriefItem(
+  briefId: string,
+  assetId: string,
+  signal: FeedbackSignal | null,
+  reason: FeedbackReason | null = null,
+): Promise<Feedback | null> {
+  const response = await fetch(`${API_URL}/briefs/${briefId}/items/${assetId}/feedback`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ signal, reason }),
+  });
+  if (!response.ok) throw new Error("无法保存新闻反馈");
+  if (response.status === 204) return null;
+  return response.json();
+}
+
+export async function getPreferenceProfile(): Promise<PreferenceProfile> {
+  const response = await fetch(`${API_URL}/briefs/preferences/profile`, { cache: "no-store" });
+  if (!response.ok) throw new Error("无法加载偏好画像");
+  return response.json();
 }
 
 export async function getSources(): Promise<SourceDefinition[]> {

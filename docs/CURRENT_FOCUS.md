@@ -2,9 +2,9 @@
 
 ## Decision
 
-As of 2026-07-14, Freja has one active product feature:
+As of 2026-07-16, Freja has one active product feature:
 
-> Generate a trustworthy Chinese AI brief from user-selected sources, with direct access to every original item.
+> Generate a trustworthy, concise, adaptive Chinese AI brief from user-selected sources, with direct access to every original item.
 
 The active product loop is deliberately limited to:
 
@@ -12,6 +12,7 @@ The active product loop is deliberately limited to:
 2. Generate the brief.
 3. Read the Chinese summary.
 4. Open the original source.
+5. Rate individual items and the overall edition.
 
 This document overrides the broader Sprint 1 user interface described in earlier planning documents. The Asset architecture remains intact, but capabilities outside this loop are not part of the current product surface.
 
@@ -30,7 +31,10 @@ This document overrides the broader Sprint 1 user interface described in earlier
 - Collect only enabled sources.
 - Isolate collector failures so one source cannot cancel the entire brief.
 - Deduplicate source items and persist provenance.
-- Rank signals using recorded source metadata.
+- Apply a hard recency policy: prioritize the latest 72 hours, use 3–7 day items only as fallback, and reject older items.
+- Rank signals using freshness, source credibility, recorded engagement, and learned user preferences.
+- Send at most five candidates to the editorial model and allow a shorter final brief.
+- Limit one source to at most three selected candidates.
 - Generate a Chinese Markdown brief with the configured OpenAI model.
 - Support both manual regeneration and the existing local schedule.
 - Never invent engagement metrics. Missing values remain missing.
@@ -40,6 +44,8 @@ This document overrides the broader Sprint 1 user interface described in earlier
 - When a source is enabled later that day, collect only that source and rerank the combined evidence.
 - Run a missing daily edition at 07:00 PT or during backend startup catch-up.
 
+The normative ranking and feedback behavior is documented in [BRIEF_RANKING_AND_FEEDBACK.md](BRIEF_RANKING_AND_FEEDBACK.md).
+
 ### Brief reading
 
 - Make the current brief the primary reading surface.
@@ -47,13 +53,14 @@ This document overrides the broader Sprint 1 user interface described in earlier
 - Open original links in a new browser tab.
 - Preserve source URLs and contributing Asset IDs for auditability.
 - Provide clear loading, empty, offline, and generation error states.
+- Place item-level feedback beside the item it affects.
+- Persist 1–5 whole-brief satisfaction for longitudinal quality evaluation.
 
 ## Current Source Scope
 
 | Source | Acquisition | Current status |
 |---|---|---|
 | Reddit | OpenCLI using an authenticated Chrome session | Active |
-| 小红书 / Rednote | OpenCLI using the official international site | Active |
 | OpenAI Blog | RSS | Active |
 | Anthropic Blog | RSS | Active |
 | Google DeepMind Blog | RSS | Active |
@@ -91,7 +98,10 @@ The focused feature is ready for regular use only when:
 - Source selection is persistent and batch controls are reliable.
 - Every visible metric comes from collector data.
 - Every summarized item has a working original URL.
-- Reddit and Rednote authentication failures are visible and recoverable.
+- Reddit authentication failures are visible and recoverable.
+- Every selected news item is no older than seven days, and fallback use is auditable.
+- The brief contains no more than five candidate-backed entries and may be shorter after editorial deduplication.
+- Item feedback changes later ranking in an explainable way.
 - A failed connector is reported without blocking successful connectors.
 - Manual generation exposes an unambiguous in-progress state and completion result.
 - Desktop and mobile layouts have no clipped controls or horizontal overflow.

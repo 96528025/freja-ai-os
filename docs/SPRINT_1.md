@@ -1,8 +1,8 @@
 # Sprint 1 Record: Daily AI Brief
 
-**Status:** Feature-complete foundation  
+**Status:** Feature-complete foundation; brief-quality iteration updated 2026-07-16
 **Recorded:** 2026-07-14  
-**Active product loop:** Select sources → Generate brief → Read summary → Open original
+**Active product loop:** Select sources → Generate concise brief → Read/open originals → Give feedback
 
 ![Freja Sprint 1 product pipeline](assets/freja-sprint-1-pipeline.jpg)
 
@@ -28,7 +28,6 @@ The current interface deliberately hides incomplete Idea, Library, Research, Arc
 | Source | Acquisition | Sprint 1 behavior |
 |---|---|---|
 | Reddit | OpenCLI with authenticated Chrome | Selected subreddits; posts older than 72 hours are excluded |
-| 小红书 / Rednote | OpenCLI with authenticated Chrome | Configured AI searches on the international site |
 | OpenAI Blog | RSS | Official publication feed |
 | Anthropic Blog | RSS | Official publication feed |
 | Google DeepMind Blog | RSS | Official publication feed |
@@ -47,6 +46,8 @@ Twitter / X and LinkedIn remain deferred because no compliant, verified collecti
 - LLM input includes the source occurrence timestamp.
 - Generated summaries must display available publication dates and cannot infer missing metrics or facts.
 - Original URLs and contributing Asset IDs are preserved.
+- All sources now share a hard brief-level recency policy: 72 hours first, 3–7 days as fallback only, and nothing older than seven days.
+- Ordinary undated news is excluded; GitHub Trending is treated as an explicit same-day ranking signal.
 
 ### 4. Daily Source Snapshots
 
@@ -66,12 +67,22 @@ Twitter / X and LinkedIn remain deferred because no compliant, verified collecti
 4. Normalize external items into the shared Asset model.
 5. Deduplicate by source and source ID.
 6. Index only newly created Assets.
-7. Rank verified candidates.
-8. Generate a Chinese Markdown brief with OpenAI.
-9. Persist a new Brief Asset with item IDs and snapshot usage.
-10. Render the full brief and open original links in new tabs.
+7. Partition candidates into fresh and fallback recency tiers.
+8. Apply explainable preference ranking and a three-items-per-source diversity cap.
+9. Send at most five candidates to the editorial model.
+10. Generate concise Chinese Markdown, merging duplicates and allowing fewer than five final entries.
+11. Persist a new Brief Asset with item IDs, recency audit data, preference summary, and snapshot usage.
+12. Render original links with item-level feedback controls.
 
-### 6. Daily automation
+### 6. Adaptive feedback
+
+- Every linked brief item can be marked interested or not interested in place.
+- Negative reasons distinguish relevance, basic content, marketing, repetition, and source quality.
+- Later runs rebuild topic, source, term, and quality weights from persisted feedback.
+- Negative feedback has stronger default influence and explicitly disliked items are excluded.
+- Whole-brief 1–5 satisfaction is stored for longitudinal evaluation but does not yet alter item ranking.
+
+### 7. Daily automation
 
 - APScheduler targets 07:00 in `America/Los_Angeles`.
 - The scheduled job generates only when the local date has no brief.
@@ -81,7 +92,7 @@ Twitter / X and LinkedIn remain deferred because no compliant, verified collecti
 - An in-process generation lock prevents manual and scheduled runs from executing concurrently.
 - A project-owned macOS LaunchAgent definition is ready but intentionally not installed automatically.
 
-### 7. Focused user interface
+### 8. Focused user interface
 
 - One centered workflow with no inactive navigation.
 - Sources grouped into community, official, and code categories.
@@ -89,9 +100,10 @@ Twitter / X and LinkedIn remain deferred because no compliant, verified collecti
 - One primary generate/regenerate command.
 - Full-width readable Chinese brief with publication metadata.
 - Original links use explicit external-link treatment and open in a new tab.
+- Demo-facing branding displays Personal AI while internal package and persistence names remain Freja.
 - Desktop and mobile layouts are covered by Playwright.
 
-### 8. Architecture and operations
+### 9. Architecture and operations
 
 - FastAPI service and repository layers.
 - Next.js and Tailwind frontend.
@@ -102,7 +114,7 @@ Twitter / X and LinkedIn remain deferred because no compliant, verified collecti
 - Health endpoint, logging, error isolation, type hints, OpenAPI, unit tests, and browser tests.
 - “Everything is an Asset” remains the durable architecture rule.
 
-## Sprint 1 Data Additions
+## Data Additions
 
 `source_snapshots` records:
 
@@ -117,9 +129,11 @@ Twitter / X and LinkedIn remain deferred because no compliant, verified collecti
 
 The identity `(source_id, local_date, config_hash)` is unique.
 
+`feedback` records item signals, structured reasons, whole-edition satisfaction, notes, and timestamps. Brief Asset metadata now records candidate recency counts and the active policy.
+
 ## Operational Constraints
 
-- Reddit and Rednote require a connected OpenCLI Chrome extension and valid login session.
+- Reddit requires a connected OpenCLI Chrome extension and valid login session.
 - The local backend must run for scheduling and catch-up behavior.
 - macOS login automation requires explicit LaunchAgent installation after the development server is stopped.
 - Current locking is process-local and assumes one backend worker.

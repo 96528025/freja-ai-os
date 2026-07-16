@@ -6,11 +6,12 @@ The active scope is defined in [CURRENT_FOCUS.md](CURRENT_FOCUS.md). Freja curre
 
 Before starting another product module, this phase prioritizes:
 
-1. Connector reliability and authentication recovery for Reddit and Rednote.
-2. Source-level observability, freshness, and accurate engagement metadata.
-3. Brief ranking, deduplication, citation, and quality evaluations.
-4. Generation progress, cancellation, history, and failure reporting.
-5. Twitter / X and LinkedIn only after a compliant, verified acquisition path exists.
+1. Connector reliability and authentication recovery for Reddit.
+2. Evaluation of the 72-hour-first, seven-day-maximum freshness policy.
+3. Brief ranking, deduplication, citation, and recommendation-quality evaluations.
+4. Use longitudinal satisfaction as an evaluation signal before allowing it to change ranking.
+5. Generation progress, cancellation, history, and failure reporting.
+6. Twitter / X and LinkedIn only after a compliant, verified acquisition path exists.
 
 The original Sprint 2-10 roadmap below is retained as a deferred direction, not an active implementation queue. Idea Inbox, Library, Research, Career, Learning, Creative, Life OS, knowledge graph, and multi-agent work must not displace brief quality until the current loop is dependable in regular use.
 

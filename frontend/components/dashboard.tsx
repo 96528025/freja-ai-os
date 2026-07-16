@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Children, isValidElement, useCallback, useEffect, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import {
   ArrowUpRight,
@@ -10,6 +10,9 @@ import {
   LockKeyhole,
   RefreshCw,
   Rss,
+  Star,
+  ThumbsDown,
+  ThumbsUp,
   X,
 } from "lucide-react";
 
@@ -17,12 +20,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   generateBrief,
+  getBriefFeedback,
   getDashboard,
+  getPreferenceProfile,
   getSources,
+  rateBrief,
+  rateBriefItem,
   updateAllSources,
   updateSource,
   type Asset,
+  type BriefFeedbackState,
   type DashboardData,
+  type FeedbackReason,
+  type FeedbackSignal,
+  type PreferenceProfile,
   type SourceDefinition,
 } from "@/lib/api";
 
@@ -39,6 +50,12 @@ const sourceGroups: Array<{ kind: SourceDefinition["kind"]; label: string }> = [
   { kind: "official", label: "官方动态" },
   { kind: "code", label: "开源趋势" },
 ];
+
+function hideInternalBrand(value: string) {
+  return value
+    .replace(/\bfreja\b/gi, "Personal AI")
+    .replace(/\bPersonal AI\s+AI\b/g, "Personal AI");
+}
 
 function formatToday() {
   return new Intl.DateTimeFormat("zh-CN", {
@@ -83,7 +100,7 @@ export function Dashboard() {
         <div className="mx-auto flex h-16 max-w-[1120px] items-center justify-between px-4 sm:px-7">
           <div className="flex items-center gap-2.5">
             <BrandMark />
-            <span className="text-lg font-semibold">freja</span>
+            <span className="text-lg font-semibold">Personal AI</span>
           </div>
           <p className="text-sm text-black/45">{formatToday()}</p>
         </div>
@@ -120,7 +137,7 @@ function OfflineNotice() {
   return (
     <div className="mb-6 flex items-center gap-3 rounded-md border border-gold/30 bg-gold/10 px-4 py-3 text-sm">
       <span className="h-2 w-2 rounded-full bg-gold" />
-      <span>Freja API 暂时无法连接。</span>
+      <span>Personal AI API 暂时无法连接。</span>
     </div>
   );
 }
@@ -323,19 +340,7 @@ function BriefPanel({ brief, loading }: { brief: Asset | null; loading: boolean 
               <Badge className="bg-coral/10 text-coral">AI Brief</Badge>
               <span className="text-xs text-black/35">中文摘要 · 来源可追溯</span>
             </div>
-            <article className="brief-markdown mx-auto max-w-[780px]">
-              <ReactMarkdown
-                components={{
-                  a: ({ children, node: _node, ...props }) => (
-                    <a {...props} target="_blank" rel="noopener noreferrer">
-                      {children}<ArrowUpRight className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" />
-                    </a>
-                  ),
-                }}
-              >
-                {brief.content}
-              </ReactMarkdown>
-            </article>
+            <InteractiveBrief brief={brief} />
           </div>
         ) : (
           <div className="grid min-h-[360px] place-items-center px-6 text-center">
@@ -348,5 +353,190 @@ function BriefPanel({ brief, loading }: { brief: Asset | null; loading: boolean 
         )}
       </div>
     </section>
+  );
+}
+
+const feedbackReasons: Array<{ value: FeedbackReason; label: string }> = [
+  { value: "not_relevant", label: "和我无关" },
+  { value: "too_basic", label: "太基础" },
+  { value: "too_marketing", label: "营销内容" },
+  { value: "repetitive", label: "重复信息" },
+  { value: "source_not_useful", label: "来源不好" },
+  { value: "other", label: "其他" },
+];
+
+function findLinkHref(children: ReactNode): string | null {
+  for (const child of Children.toArray(children)) {
+    if (!isValidElement<{ href?: string; children?: ReactNode }>(child)) continue;
+    if (child.props.href) return child.props.href;
+    const nested = findLinkHref(child.props.children);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function normalizeUrl(value: string | null | undefined) {
+  return value?.replace(/\/$/, "") ?? "";
+}
+
+function InteractiveBrief({ brief }: { brief: Asset }) {
+  const [state, setState] = useState<BriefFeedbackState | null>(null);
+  const [profile, setProfile] = useState<PreferenceProfile | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadFeedback = useCallback(async () => {
+    try {
+      const [feedback, preferenceProfile] = await Promise.all([
+        getBriefFeedback(brief.id),
+        getPreferenceProfile(),
+      ]);
+      setState(feedback);
+      setProfile(preferenceProfile);
+      setError(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "无法加载反馈");
+    }
+  }, [brief.id]);
+
+  useEffect(() => {
+    loadFeedback();
+  }, [loadFeedback]);
+
+  async function setItemFeedback(assetId: string, signal: FeedbackSignal | null, reason: FeedbackReason | null = null) {
+    setSaving(assetId);
+    try {
+      await rateBriefItem(brief.id, assetId, signal, reason);
+      await loadFeedback();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "反馈保存失败");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function setSatisfaction(value: number) {
+    setSaving("satisfaction");
+    try {
+      await rateBrief(brief.id, value);
+      await loadFeedback();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "满意度保存失败");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  const itemsByUrl = new Map(
+    (state?.items ?? [])
+      .filter(({ asset }) => asset.url)
+      .map((item) => [normalizeUrl(item.asset.url), item]),
+  );
+  function itemForHref(href: string | null) {
+    if (!href) return null;
+    return itemsByUrl.get(normalizeUrl(href)) ?? null;
+  }
+
+  function feedbackControls(assetId: string) {
+    const item = state?.items.find(({ asset }) => asset.id === assetId);
+    const signal = item?.feedback?.signal ?? null;
+    return (
+      <div className="my-3 rounded-md border border-black/[0.07] bg-[#fbfaf7] px-3 py-2.5 text-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-xs text-black/35">这条对你有用吗？</span>
+          <button
+            type="button"
+            disabled={saving === assetId}
+            onClick={() => setItemFeedback(assetId, signal === "interested" ? null : "interested")}
+            className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-semibold transition-colors disabled:opacity-50 ${signal === "interested" ? "border-ink bg-ink text-white" : "border-black/10 bg-white text-black/55 hover:border-black/25"}`}
+          >
+            <ThumbsUp className="h-3 w-3" />感兴趣
+          </button>
+          <button
+            type="button"
+            disabled={saving === assetId}
+            onClick={() => setItemFeedback(assetId, signal === "not_interested" ? null : "not_interested")}
+            className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-semibold transition-colors disabled:opacity-50 ${signal === "not_interested" ? "border-coral bg-coral text-white" : "border-black/10 bg-white text-black/55 hover:border-black/25"}`}
+          >
+            <ThumbsDown className="h-3 w-3" />不感兴趣
+          </button>
+          {saving === assetId && <Loader2 className="h-3.5 w-3.5 animate-spin text-black/30" />}
+        </div>
+        {signal === "not_interested" && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-black/[0.06] pt-2">
+            <span className="mr-1 text-xs text-black/35">为什么？</span>
+            {feedbackReasons.map((reason) => (
+              <button
+                key={reason.value}
+                type="button"
+                disabled={saving === assetId}
+                onClick={() => setItemFeedback(assetId, "not_interested", reason.value)}
+                className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${item?.feedback?.reason === reason.value ? "border-coral bg-coral/10 text-coral" : "border-black/10 bg-white text-black/45 hover:border-black/25"}`}
+              >
+                {reason.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-[780px]">
+      <article className="brief-markdown">
+        <ReactMarkdown
+          components={{
+            a: ({ children, node: _node, ...props }) => (
+              <a {...props} target="_blank" rel="noopener noreferrer">
+                {children}<ArrowUpRight className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" />
+              </a>
+            ),
+            li: ({ children, node: _node, ...props }) => {
+              const href = findLinkHref(children);
+              const item = itemForHref(href);
+              return (
+                <li {...props}>
+                  {children}
+                  {item && feedbackControls(item.asset.id)}
+                </li>
+              );
+            },
+          }}
+        >
+          {hideInternalBrand(brief.content)}
+        </ReactMarkdown>
+      </article>
+
+      {profile && profile.total_item_feedback > 0 && (
+        <div className="mt-7 rounded-md bg-[#f6f4ee] px-4 py-3 text-xs leading-5 text-black/45">
+          Personal AI 已学习 {profile.total_item_feedback} 条反馈
+          {profile.preferred_topics.length > 0 && ` · 更多 ${profile.preferred_topics.join("、")}`}
+          {profile.avoided_topics.length > 0 && ` · 减少 ${profile.avoided_topics.join("、")}`}
+        </div>
+      )}
+
+      <div className="mt-8 rounded-md border border-black/[0.08] bg-[#fbfaf7] px-4 py-4 sm:flex sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold">你对今天的简报满意吗？</p>
+          <p className="mt-0.5 text-xs text-black/35">长期满意度会帮助我们判断推荐是否真的在进步。</p>
+        </div>
+        <div className="mt-3 flex gap-1 sm:mt-0" aria-label="简报满意度">
+          {[1, 2, 3, 4, 5].map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-label={`${value} 分`}
+              disabled={saving === "satisfaction"}
+              onClick={() => setSatisfaction(value)}
+              className="group grid h-9 w-9 place-items-center rounded-md hover:bg-gold/10 disabled:opacity-50"
+            >
+              <Star className={`h-5 w-5 ${value <= (state?.satisfaction?.satisfaction ?? 0) ? "fill-gold text-gold" : "text-black/20 group-hover:text-gold"}`} />
+            </button>
+          ))}
+        </div>
+      </div>
+      {error && <p className="mt-3 text-sm text-coral">{error}</p>}
+    </div>
   );
 }

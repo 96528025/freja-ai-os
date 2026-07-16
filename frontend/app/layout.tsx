@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Freja · Personal AI OS",
+  title: "Personal AI",
   description: "A personal operating system for ideas, research, and knowledge.",
 };
 
@@ -13,4 +13,3 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     </html>
   );
 }
-

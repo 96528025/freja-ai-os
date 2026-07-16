@@ -1,8 +1,18 @@
 # Freja Personal AI OS
 
-Freja is an asset-first personal AI operating system. Its current product focus is one dependable workflow: select trusted sources, generate a Chinese AI brief, read the summary, and open the original items. Broader personal knowledge capabilities are documented but intentionally deferred; see [`docs/CURRENT_FOCUS.md`](docs/CURRENT_FOCUS.md).
+Freja is an asset-first personal AI operating system. Its current product focus is one dependable, adaptive workflow: select trusted sources, generate a concise Chinese AI brief, read original items, and teach the next edition with explicit feedback. Broader personal knowledge capabilities are documented but intentionally deferred; see [`docs/CURRENT_FOCUS.md`](docs/CURRENT_FOCUS.md).
 
-Sprint 1 is recorded in [`docs/SPRINT_1.md`](docs/SPRINT_1.md), including the product pipeline, source contracts, daily snapshots, automation, verification baseline, and deferred backlog.
+Sprint 1 is recorded in [`docs/SPRINT_1.md`](docs/SPRINT_1.md). The current ranking and learning contract is specified in [`docs/BRIEF_RANKING_AND_FEEDBACK.md`](docs/BRIEF_RANKING_AND_FEEDBACK.md).
+
+## Current Brief Contract
+
+- Only user-enabled sources enter the candidate pool.
+- News from the last 72 hours is ranked first; 3–7 day items are fallback-only; older items are excluded.
+- At most five candidates reach the editorial model, and the final brief may be shorter.
+- At most three candidates may come from one source.
+- Per-item interest feedback updates topic, source, keyword, and quality weights for later editions.
+- Every brief preserves source links, contributing Asset IDs, recency counts, snapshot usage, and the preference profile used for ranking.
+- Internal code and data retain the Freja name; the demo-facing UI displays **Personal AI**.
 
 ## Architecture Principle
 
@@ -50,20 +60,24 @@ npm run dev
 - `GET /api/v1/dashboard` returns dashboard projections.
 - `POST /api/v1/briefs/generate` starts collection and brief generation.
 - `GET /api/v1/briefs/today` returns today's brief.
+- `GET /api/v1/briefs/{brief_id}/feedback` returns item and satisfaction feedback state.
+- `PUT /api/v1/briefs/{brief_id}/items/{asset_id}/feedback` records or clears item feedback.
+- `PUT /api/v1/briefs/{brief_id}/feedback` records the 1–5 brief satisfaction score.
+- `GET /api/v1/briefs/preferences/profile` returns the learned profile summary.
 
 ## Operations
 
 - The scheduler runs every day at `BRIEF_HOUR:BRIEF_MINUTE` in `TIMEZONE`.
 - SQLite and Chroma files live under `backend/data` locally and in the `freja_data` volume under Docker.
 - Every collector is isolated. One unavailable source is logged and skipped without failing the whole brief.
-- Source choices are persisted in SQLite and managed from the Dashboard's **Sources** panel. Available connectors include granular official blogs, GitHub Trending, Claude Code and Codex release feeds; community connectors expose their authentication state.
+- Source choices are persisted in SQLite and managed from the Dashboard's **Sources** panel. Available connectors include Reddit, granular official blogs, GitHub Trending, Claude Code, and Codex release feeds. Reddit exposes its OpenCLI Chrome authentication state. Rednote / Xiaohongshu is not in the current registry.
 - FastAPI exposes OpenAPI at `/docs` and `/openapi.json`.
 
 ## Verification
 
 ```bash
 cd backend && pytest
-cd frontend && npm run build
+cd frontend && npx tsc --noEmit
 ```
 
 Product and engineering specifications are in [`docs/`](./docs).

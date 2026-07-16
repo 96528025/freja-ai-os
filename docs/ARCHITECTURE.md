@@ -21,6 +21,8 @@ Source connectors are registered independently in `SourceRegistry`. Operational 
 
 `SourceSnapshot` caches a successful connector result by source, local date, and configuration hash. Snapshot records reference canonical Asset IDs instead of copying source content. A same-day brief can therefore reuse existing sources, collect only newly enabled sources, and still rerank the combined evidence before synthesis.
 
+`Feedback` stores item-level interest signals, negative-feedback reasons, and whole-edition satisfaction. `PreferenceService` rebuilds an explainable profile from persisted item feedback on every generation; no opaque model state or fine-tuning is required.
+
 ## 2. Folder Structure
 
 ```text
@@ -76,7 +78,7 @@ Core indexes cover type/time, source identity, status, parent, and creation time
 | idea | `category`, `captured_via` |
 | news | `publisher`, `score`, `comments`, `subreddit` |
 | repository | `period`, later `stars`, `language`, `owner` |
-| brief | `item_ids`, `collector_count`, later prompt/model provenance |
+| brief | `item_ids`, recency counts and policy, source snapshot usage, preference profile summary |
 | task | `due_at`, `priority`, `completed_at` |
 
 Metadata should be promoted to a real column only when it becomes cross-type, indexed, or part of a stable invariant.
@@ -97,7 +99,19 @@ Metadata should be promoted to a real column only when it becomes cross-type, in
 2. Collectors execute concurrently and fail independently.
 3. Normalize all results into `CollectedItem` values.
 4. Deduplicate by `(source, source_id)` and persist source Assets.
-5. Rank signals, ask the LLM for Chinese Markdown, and persist a Brief Asset referencing item IDs.
+5. Partition candidates into 72-hour fresh and 3–7 day fallback tiers; reject older and ordinary undated news.
+6. Rank the fresh tier with credibility, freshness, engagement, and learned preference weights.
+7. Use fallback items only when needed, cap each source at three items, and select at most five candidates.
+8. Ask the LLM to merge duplicates and create concise Chinese Markdown without padding.
+9. Persist a Brief Asset referencing item IDs and the full recency/snapshot/profile audit metadata.
+
+### Feedback loop
+
+1. Match rendered Markdown links back to contributing Asset IDs.
+2. Persist interested/not-interested signals and optional structured reasons.
+3. Rebuild topic, source, term, and quality weights during the next generation.
+4. Exclude explicitly disliked Asset IDs and apply reason-specific multipliers.
+5. Persist whole-brief satisfaction separately for evaluation; it does not yet alter ranking.
 
 ## 5. Architecture Decisions
 
@@ -105,6 +119,7 @@ Metadata should be promoted to a real column only when it becomes cross-type, in
 - **JSON metadata:** enables early type growth without dozens of sparse tables; schemas must become versioned as contracts mature.
 - **SQLAlchemy:** keeps the repository portable to PostgreSQL while SQLite remains operationally simple.
 - **Graceful AI degradation:** the OS must retain memory even when an external intelligence provider is unavailable.
+- **Explainable adaptation:** explicit feedback changes inspectable counters and score components instead of hidden recommendation state.
 - **Background task now, durable queue later:** FastAPI tasks and APScheduler are enough for one local process; a job table plus worker queue is required before multi-instance deployment.
 
 ## 6. Production Evolution

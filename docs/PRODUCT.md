@@ -1,6 +1,6 @@
 # Freja Product Requirements and SRS
 
-> **Current scope notice (2026-07-14):** The active product experience is limited to source selection, brief generation, summary reading, and opening original sources. See [CURRENT_FOCUS.md](CURRENT_FOCUS.md). The broader requirements below document retained architecture and deferred capabilities; they are not all active UI commitments.
+> **Current scope notice (2026-07-16):** The active product experience is limited to source selection, concise brief generation, summary reading, opening original sources, and explicit feedback. See [CURRENT_FOCUS.md](CURRENT_FOCUS.md). The broader requirements below document retained architecture and deferred capabilities; they are not all active UI commitments.
 
 ## 1. Product Requirements Document
 
@@ -15,9 +15,10 @@ A technically fluent individual who follows AI, generates frequent project ideas
 ### Jobs to be done
 
 1. Understand the few AI developments that matter each morning without reading every source.
-2. Capture an idea in seconds without manually filing it.
-3. Find prior ideas, links, reports, and generated knowledge from one search surface.
-4. See the current state of personal knowledge and pending work at a glance.
+2. Correct the recommender in place so unwanted topics, sources, repetition, and low-quality patterns decrease over time.
+3. Capture an idea in seconds without manually filing it.
+4. Find prior ideas, links, reports, and generated knowledge from one search surface.
+5. See the current state of personal knowledge and pending work at a glance.
 
 ### Sprint 1 outcomes
 
@@ -55,6 +56,10 @@ The current focused release exposes only the morning brief outcome. Idea, librar
 | FR-06 | Search assets | Type-filtered lexical search works; semantic index is populated when available |
 | FR-07 | Project dashboard state | One endpoint returns brief, ideas, research, tasks, and counts |
 | FR-08 | Preserve provenance | External assets store source, source ID, URL, occurrence time, and raw metadata |
+| FR-09 | Enforce brief recency | 72-hour content ranks first, 3–7 day content is fallback-only, and older news is excluded |
+| FR-10 | Keep the brief concise | At most five candidates reach editorial synthesis and the final edition may be shorter |
+| FR-11 | Learn from explicit item feedback | Topic, source, term, and quality weights affect later ranking |
+| FR-12 | Preserve recommendation audit data | Brief metadata records item IDs, recency counts/policy, snapshot usage, and profile summary |
 
 ### Non-functional requirements
 
